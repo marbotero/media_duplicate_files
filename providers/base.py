@@ -55,6 +55,8 @@ class MediaItem:
     # Hash perceptual (se calcula al descargar)
     phash: Optional[str] = None
     video_frame_hashes: list = field(default_factory=list)
+    # Metadatos adicionales (EXIF, ffprobe, etc.)
+    extra: dict = field(default_factory=dict)
 
     @property
     def is_image(self) -> bool:
@@ -87,6 +89,9 @@ class MediaItem:
             d["height"] = int(d["height"])
         if d.get("duration_ms"):
             d["duration_ms"] = int(d["duration_ms"])
+        # Serializar extra (metadatos) de forma segura
+        if d.get("extra"):
+            d["extra"] = _serialize_safe(d["extra"])
         return d
 
 
@@ -113,3 +118,25 @@ class StorageProvider(abc.ABC):
     def is_authenticated(self) -> bool:
         """Verifica si ya está autenticado."""
         return False
+
+
+def _serialize_safe(obj):
+    """Convierte recursivamente un objeto a tipos JSON-serializables."""
+    import datetime
+    if isinstance(obj, dict):
+        return {k: _serialize_safe(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_serialize_safe(v) for v in obj]
+    elif isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+    elif isinstance(obj, bytes):
+        try:
+            return obj.decode("ascii", errors="replace").strip("\x00")
+        except Exception:
+            return f"<bytes:{len(obj)}>"
+    elif isinstance(obj, datetime.datetime):
+        return obj.isoformat()
+    elif hasattr(obj, "numerator") and hasattr(obj, "denominator"):
+        return float(obj.numerator) / float(obj.denominator) if obj.denominator else 0
+    else:
+        return str(obj)

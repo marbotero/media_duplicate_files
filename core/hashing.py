@@ -13,6 +13,7 @@ import tempfile
 from typing import Optional
 
 from providers.base import MediaItem
+from core.metadata import extract_metadata
 
 logger = logging.getLogger("media_dedupe")
 
@@ -63,6 +64,16 @@ def compute_hashes_from_provider(
             item.md5 = md5
         if sha256:
             item.sha256 = sha256
+
+        # Extraer metadatos del archivo descargado
+        try:
+            metadata = extract_metadata(tmp_path)
+            if metadata:
+                if not item.extra:
+                    item.extra = {}
+                item.extra["metadata"] = metadata
+        except Exception:
+            pass
 
         return md5, sha256
     except Exception as e:

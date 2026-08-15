@@ -1,6 +1,6 @@
 # Media Dedupe — Detector de Duplicados Multi-origen
 
-Programa en Python que detecta archivos duplicados y casi-duplicados en **Google Drive**, **Google Photos**, **Google Takeout**, **Microsoft OneDrive** y **WhatsApp** (carpeta local), con doble verificación de hashes **SHA-256 y MD5**.
+Programa en Python que detecta archivos duplicados y casi-duplicados en **Google Drive**, **Google Photos**, **Google Takeout**, **Microsoft OneDrive**, **WhatsApp** (carpeta local) y **cualquier carpeta local** del sistema, con doble verificación de hashes **SHA-256 y MD5** y extracción de **metadatos EXIF completos**.
 
 ## Tipos de detección
 
@@ -33,6 +33,65 @@ Programa en Python que detecta archivos duplicados y casi-duplicados en **Google
 - Escanea subcarpetas: `WhatsApp Images`, `WhatsApp Video`, `WhatsApp Animated Gifs`, `WhatsApp Documents`
 
 > **Nota sobre WhatsApp:** WhatsApp no expone una API pública para recorrer fotos del backup. Los backups cifrados de WhatsApp en Google Drive no se pueden navegar como archivos individuales. Este programa funciona con las fotos almacenadas en una carpeta local accesible desde tu equipo.
+
+### Carpeta local (cualquier carpeta del explorador)
+
+Puedes escanear cualquier carpeta del sistema de archivos (Windows, macOS, Linux) en busca de duplicados:
+
+```bash
+python media_dedupe.py scan --local-folder /ruta/a/carpeta --report reporte
+```
+
+Para escanear múltiples carpetas, repite el argumento:
+```bash
+python media_dedupe.py scan --local-folder /fotos --local-folder /backup --report reporte
+```
+
+El provider recorre recursivamente la carpeta, detecta imágenes y videos por extensión, calcula MD5/SHA-256 y extrae metadatos EXIF directamente.
+
+### Metadatos 100% reales (ExifTool + PyExifTool)
+
+El programa usa **PyExifTool** como motor principal de extracción de metadatos. ExifTool (de Phil Harvey) es el estándar de la industria para leer metadatos de imágenes y videos. A diferencia de las librerías nativas de Python (Pillow, ffprobe), ExifTool puede leer:
+
+- **MakerNotes**: datos secretos que marcas como Sony, Canon, Apple, Nikon, etc. incluyen en sus archivos y que Pillow no puede leer
+- **Metadatos completos de videos**: MP4, MOV, MKV, AVI con todos los tags (no solo los básicos de ffprobe)
+- **GPS de videos**: coordenadas grabadas por cámaras de acción (GoPro, DJI, etc.)
+- **Formatos RAW**: CR2, CR3, NEF, ARW, DNG, ORF, RW2, PEF, RAF
+- **XMP, IPTC**: metadatos adicionales que ExifTool unifica en una sola lectura
+- **Todos los tags disponibles**: ExifTool extrae TODOS los campos, no solo los comunes
+
+**Instalación de ExifTool:**
+
+- **Windows**: Descarga desde [exiftool.org](https://exiftool.org/) y renombra a `exiftool.exe` en el PATH
+- **macOS**: `brew install exiftool`
+- **Ubuntu/Debian**: `sudo apt install libimage-exiftool-perl`
+- **Python**: `pip install pyexiftool` (ya incluido en requirements.txt)
+
+> Si ExifTool no está instalado, el programa usa automáticamente Pillow (imágenes) + ffprobe (videos) como fallback, pero con menos metadatos.
+
+**Campos extraídos:**
+
+Imágenes:
+- Resolución, formato, modo de color
+- Fecha de captura (DateTimeOriginal)
+- Cámara (marca, modelo, tipo via MakerNotes)
+- Lente (modelo, marca, número de serie)
+- ISO, apertura (f/), longitud focal, equivalente 35mm
+- Tiempo de exposición, compensación, velocidad de obturación
+- Flash, espacio de color, balance de blancos
+- Software, orientación, resolución
+- GPS (latitud, longitud, altitud, enlace a Google Maps)
+- MakerNotes completos (datos secretos de Canon, Sony, Apple, Nikon, etc.)
+- Todos los tags EXIF, XMP, IPTC, Composite
+
+Videos:
+- Duración, codec de video y audio
+- Resolución, FPS, bitrate
+- Fecha de creación, fecha de modificación
+- GPS (si está embebido)
+- Todos los tags QuickTime/MP4/MOV
+
+Los metadatos se incluyen en el reporte JSON (`extra.metadata`) con el campo `extraction_engine` indicando qué motor se usó, y se muestran en la GUI para comparar archivos duplicados lado a lado.
 
 ### Google Takeout (completo)
 
@@ -117,6 +176,22 @@ brew install ffmpeg
 
 **Windows:**
 Descarga desde https://ffmpeg.org/download.html y añádelo al PATH.
+
+### ExifTool (recomendado)
+Necesario para extracción de metadatos 100% reales (MakerNotes, metadatos de video, RAW). Sin ExifTool, el programa usa Pillow+ffprobe como fallback con menos metadatos.
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install libimage-exiftool-perl
+```
+
+**macOS (Homebrew):**
+```bash
+brew install exiftool
+```
+
+**Windows:**
+Descarga desde [exiftool.org](https://exiftool.org/) y renombra `exiftool(-k).exe` a `exiftool.exe` en una carpeta del PATH.
 
 ### Dependencias de Python
 ```bash
@@ -284,8 +359,10 @@ El programa usa una caché SQLite (`media_cache.db`) para evitar recalcular hash
 
 ## Seguridad
 
-- El programa **NO borra ni mueve archivos**. Solo lee y reporta.
-- Permisos de solo lectura en todos los providers.
+- El programa **NO borra ni mueve archivos** por defecto. Solo lee y reporta.
+- La GUI permite mover duplicados a una carpeta de cuarentena (`_media_dedupe_eliminados/`) con confirmación del usuario. Los archivos **no se borran permanentemente**.
+- **Restauración**: desde la pestaña Cuarentena de la GUI se pueden restaurar archivos individuales o sesiones completas a su ubicación original. Si la ruta original ya está ocupada, se restaura con sufijo `_restaurado`.
+- Permisos de solo lectura en todos los providers cloud.
 - Los archivos se descargan temporalmente y se eliminan tras procesarlos.
 - Las credenciales OAuth se guardan localmente.
 
@@ -299,14 +376,15 @@ python media_dedupe_gui.py
 
 ### Características de la GUI
 
-- **Pestaña Configuración**: selecciona orígenes con checkboxes, busca carpetas locales con diálogo nativo, configura umbrales y modo de hash.
-- **Pestaña Resultados**: muestra un resumen con grupos encontrados y espacio recuperable, árbol navegable con cada grupo y sus archivos (nombre, origen, tamaño, MD5, SHA-256).
+- **Pestaña Configuración**: selecciona orígenes con checkboxes (Drive, OneDrive, Photos, WhatsApp, Takeout, carpeta local), busca carpetas con diálogo nativo del explorador, configura umbrales y modo de hash.
+- **Pestaña Resultados**: muestra un resumen con grupos encontrados y espacio recuperable, árbol navegable de grupos, y **comparación lado a lado** de archivos duplicados con todos sus metadatos (EXIF, resolución, cámara, fecha de captura, GPS, hashes, etc.).
+- **Miniaturas**: vista previa de imágenes locales directamente en la comparación.
+- **Eliminación selectiva**: marca qué archivos eliminar con checkboxes. Botón "Conservar este" para mantener la mejor copia y marcar las demás. Los archivos se mueven a cuarentena (no se borran).
+- **Pestaña Cuarentena**: lista todas las sesiones de cuarentena con sus archivos. Permite restaurar archivos individuales o sesiones completas a su ubicación original. Incluye detalle de cada archivo (ruta original, ruta de cuarentena, estado). Si la ruta original ya está ocupada, restaura con sufijo `_restaurado`. Botón para eliminar sesiones definitivamente.
 - **Pestaña Logs**: salida en vivo del proceso de escaneo.
-- **Botones de autenticación**: autentica cada provider (Drive, OneDrive, Photos) directamente desde la GUI.
-- **Botón de confirmación del Picker**: si usas Google Photos en modo `picker`, aparece un botón para confirmar la selección.
-- **Botones de reportes**: abre los reportes HTML, CSV y JSON con la aplicación predeterminada del sistema.
-- **Barra de progreso** indeterminada durante el escaneo.
-- **Botón Detener**: interrumpe el escaneo en cualquier momento.
+- **Botones de autenticación** para cada provider cloud.
+- **Botones de reportes**: abre HTML, CSV y JSON con la aplicación predeterminada.
+- **Barra de progreso** y botón **Detener** durante el escaneo.
 
 > La GUI ejecuta el CLI (`media_dedupe.py scan ...`) en segundo plano. No reimplementa la lógica de escaneo, por lo que todo el comportamiento (caché, providers, reportes) es idéntico al CLI.
 
@@ -324,12 +402,14 @@ media-dedupe/
 │   ├── google_drive.py      # Provider Google Drive (API)
 │   ├── google_photos.py     # Provider Google Photos (API + Picker)
 │   ├── google_takeout.py    # Provider Google Takeout completo
+│   ├── local_folder.py      # Provider carpeta local genérica
 │   ├── onedrive.py          # Provider OneDrive (Graph API)
 │   ├── whatsapp_local.py    # Provider WhatsApp (carpeta local)
 │   └── router.py            # Router para despacho por origen
 ├── core/
 │   ├── __init__.py
-│   ├── hashing.py           # Cálculo MD5 + SHA-256
+│   ├── hashing.py           # Cálculo MD5 + SHA-256 + metadata
+│   ├── metadata.py          # Extracción EXIF (imágenes) + ffprobe (videos)
 │   ├── similarity.py        # pHash + detección de duplicados
 │   ├── cache.py             # Caché SQLite
 │   └── reports.py            # Generación de CSV/JSON/HTML
@@ -337,7 +417,8 @@ media-dedupe/
 ├── onedrive_config.json     # Config OneDrive (tú lo creas)
 ├── token_drive.json         # Token Google Drive (auto-generado)
 ├── token_photos.json        # Token Google Photos (auto-generado)
-└── media_cache.db           # Caché SQLite (auto-generado)
+├── media_cache.db           # Caché SQLite (auto-generado)
+└── _media_dedupe_eliminados/  # Cuarentena de archivos eliminados (GUI)
 ```
 
 ## Limitaciones

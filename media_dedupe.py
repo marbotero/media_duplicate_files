@@ -36,6 +36,7 @@ from providers.base import MediaItem, IMAGE_MIMES, VIDEO_MIMES
 from providers.google_drive import GoogleDriveProvider
 from providers.google_photos import GooglePhotosProvider
 from providers.google_takeout import GoogleTakeoutProvider
+from providers.local_folder import LocalFolderProvider
 from providers.onedrive import OneDriveProvider
 from providers.whatsapp_local import WhatsAppLocalProvider
 from providers.router import ProviderRouter
@@ -190,6 +191,13 @@ def cmd_scan(args):
         providers.append(("google_takeout", gt, None))
         provider_names.append("Google Takeout (completo)")
 
+    # Configurar carpeta(s) local(es) arbitraria(s)
+    if args.local_folder:
+        for folder in args.local_folder:
+            lf = LocalFolderProvider(base_folder=folder)
+            providers.append(("local_folder", lf, None))
+            provider_names.append(f"Carpeta local: {folder}")
+
     if not providers:
         print("ERROR: Especifica al menos un origen:")
         print("  --source google-drive")
@@ -198,6 +206,7 @@ def cmd_scan(args):
         print("  --whatsapp-folder /ruta/a/WhatsApp")
         print("  --google-photos-folder /ruta/Takeout/Google Photos")
         print("  --google-takeout-folder /ruta/Takeout")
+        print("  --local-folder /ruta/a/carpeta")
         sys.exit(1)
 
     print(f"\nOrígenes configurados: {', '.join(provider_names)}")
@@ -424,6 +433,8 @@ Ejemplos:
                               help="Carpeta local de Google Photos (exportación Takeout, solo Photos)")
     scan_parser.add_argument("--google-takeout-folder", default=None,
                               help="Carpeta de Google Takeout completa (todos los productos de Google)")
+    scan_parser.add_argument("--local-folder", action="append", default=[],
+                              help="Carpeta local arbitraria a escanear (repetir para múltiples)")
     scan_parser.add_argument("--photos-mode", choices=["app-created", "picker"], default="app-created",
                               help="Modo de Google Photos API: 'app-created' o 'picker'")
     scan_parser.add_argument("--drive-root", default=None,

@@ -128,6 +128,7 @@ def to_html(groups: List[DuplicateGroup], output_path: str):
         "google_picasa_takeout": "Picasa (Takeout)",
         "google_takeout_other": "Google Takeout (otros)",
         "google_takeout": "Google Takeout",
+        "local_folder": "Carpeta local",
     }
 
     for idx, group in enumerate(groups, 1):
