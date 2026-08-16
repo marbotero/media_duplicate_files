@@ -210,6 +210,11 @@ pip install -r requirements.txt
 
 ### Microsoft OneDrive (Graph API)
 
+> Cada proveedor tiene su propio flujo y su propio token. Google Drive y OneDrive no comparten el mismo archivo de autenticación.
+>
+> - Google Drive: `credentials.json` + `token_drive.json`
+> - OneDrive: `onedrive_config.json` + `token_onedrive.json`
+
 1. Ve a [Microsoft Entra ID](https://entra.microsoft.com/) (Azure Portal).
 2. **App registrations > New registration**.
 3. Tipo de cuenta: **Personal** (para OneDrive personal).

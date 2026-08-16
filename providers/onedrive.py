@@ -23,7 +23,7 @@ logger = logging.getLogger("media_dedupe")
 CLIENT_ID_FILE = "onedrive_config.json"  # JSON con client_id y tenant
 TOKEN_CACHE_FILE = "token_onedrive.json"
 
-GRAPH_SCOPES = ["Files.Read.All", "User.Read", "offline_access"]
+GRAPH_SCOPES = ["Files.Read.All", "User.Read"]
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 MAX_RETRIES = 3
@@ -41,6 +41,7 @@ class OneDriveProvider(StorageProvider):
         self.client_id = None
         self.access_token = None
         self.app = None
+        self._token_cache = None
 
     def authenticate(self) -> bool:
         try:
@@ -74,10 +75,16 @@ class OneDriveProvider(StorageProvider):
             logger.error("El archivo de configuración debe contener 'client_id'.")
             return False
 
-        # Crear app MSAL con cache en archivo
+        # Crear app MSAL con cache persistente en archivo
+        self._token_cache = msal.SerializableTokenCache()
+        if os.path.exists(self.token_cache):
+            with open(self.token_cache, "r", encoding="utf-8") as f:
+                self._token_cache.deserialize(f.read())
+
         self.app = msal.PublicClientApplication(
             self.client_id,
             authority=f"https://login.microsoftonline.com/{tenant}",
+            token_cache=self._token_cache,
         )
 
         # Intentar obtener token de la cache primero
@@ -88,13 +95,21 @@ class OneDriveProvider(StorageProvider):
 
         if not result:
             logger.info("OneDrive: abriendo navegador para autenticación...")
-            result = self.app.acquire_token_interactive(GRAPH_SCOPES)
+            result = self.app.acquire_token_interactive(
+                scopes=GRAPH_SCOPES,
+                login_hint=None,
+                prompt="select_account",
+            )
 
         if "access_token" not in result:
             logger.error(f"OneDrive: error de autenticación: {result.get('error_description', result)}")
             return False
 
         self.access_token = result["access_token"]
+
+        with open(self.token_cache, "w", encoding="utf-8") as f:
+            f.write(self.app.token_cache.serialize())
+
         logger.info("OneDrive: autenticación exitosa.")
         return True
 
