@@ -21,10 +21,21 @@ from providers.base import MediaItem
 logger = logging.getLogger("media_dedupe")
 
 # Umbrales por defecto
-DEFAULT_IMAGE_THRESHOLD = 5      # Distancia Hamming máxima
+DEFAULT_IMAGE_THRESHOLD = 95.0   # Porcentaje mínimo de similitud para imágenes
 DEFAULT_VIDEO_THRESHOLD = 0.85   # Ratio mínimo de frames similares
 VIDEO_NUM_FRAMES = 8
 VIDEO_FRAME_THRESHOLD_OFFSET = 3  # Umbral más laxo para frames individuales
+
+
+def image_similarity_percent(hash_a, hash_b) -> float:
+    """Calcula la similitud entre dos hashes pHash como porcentaje de 0 a 100."""
+    if hash_a is None or hash_b is None:
+        return 0.0
+
+    distance = hash_a - hash_b
+    max_bits = 64
+    similarity = (1 - (distance / max_bits)) * 100
+    return max(0.0, min(100.0, similarity))
 
 
 @dataclass
@@ -84,9 +95,9 @@ def find_similar_images(
     items: list[MediaItem],
     provider,
     cache_dir: str,
-    threshold: int = DEFAULT_IMAGE_THRESHOLD,
+    threshold: float = DEFAULT_IMAGE_THRESHOLD,
 ) -> list[DuplicateGroup]:
-    """Encuentra imágenes casi-duplicadas usando pHash y distancia Hamming."""
+    """Encuentra imágenes casi-duplicadas usando porcentaje de similitud pHash."""
     try:
         import imagehash
     except ImportError:
@@ -109,7 +120,6 @@ def find_similar_images(
 
     logger.info(f"Comparando {len(hashed)} imágenes con hash válido...")
 
-    # Union-find para agrupar transitivamente
     parent = list(range(len(hashed)))
 
     def find(x):
@@ -123,17 +133,17 @@ def find_similar_images(
         if ra != rb:
             parent[ra] = rb
 
-    min_distance = defaultdict(lambda: float("inf"))
+    best_similarity = defaultdict(lambda: 0.0)
 
     for i in range(len(hashed)):
         h1 = imagehash.hex_to_hash(hashed[i].phash)
         for j in range(i + 1, len(hashed)):
             h2 = imagehash.hex_to_hash(hashed[j].phash)
-            dist = h1 - h2
-            if dist <= threshold:
+            pct = image_similarity_percent(h1, h2)
+            if pct >= threshold:
                 union(i, j)
-                min_distance[(i, j)] = dist
-                min_distance[(j, i)] = dist
+                best_similarity[(i, j)] = pct
+                best_similarity[(j, i)] = pct
 
     groups = defaultdict(list)
     for i in range(len(hashed)):
@@ -143,19 +153,19 @@ def find_similar_images(
     for group_indices in groups.values():
         if len(group_indices) > 1:
             group_files = [hashed[i] for i in group_indices]
-            min_d = float("inf")
+            best_pct = 0.0
             for i in group_indices:
                 for j in group_indices:
                     if i != j:
-                        d = min_distance.get((i, j), float("inf"))
-                        if d < min_d:
-                            min_d = d
+                        pct = best_similarity.get((i, j), 0.0)
+                        if pct > best_pct:
+                            best_pct = pct
             total_size = sum(f.size for f in group_files)
             max_size = max(f.size for f in group_files)
             duplicates.append(DuplicateGroup(
                 group_type="image_similar",
                 files=group_files,
-                score=min_d,
+                score=best_pct,
                 recoverable_size=total_size - max_size,
             ))
 

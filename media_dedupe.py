@@ -32,6 +32,11 @@ from typing import List, Optional
 # Asegurar que el directorio actual está en el path para imports relativos
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from config.paths import (
+    GOOGLE_DRIVE_CREDENTIALS, GOOGLE_DRIVE_TOKEN,
+    ONEDRIVE_CONFIG, ONEDRIVE_TOKEN,
+    MEDIA_CACHE_DB, REPORTE_JSON, REPORTE_HTML, REPORTE_CSV,
+)
 from providers.base import MediaItem, IMAGE_MIMES, VIDEO_MIMES
 from providers.google_drive import GoogleDriveProvider
 from providers.google_photos import GooglePhotosProvider
@@ -57,7 +62,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("media_dedupe")
 
-CACHE_DB = "media_cache.db"
+CACHE_DB = str(MEDIA_CACHE_DB)
 CACHE_DIR = tempfile.mkdtemp(prefix="media_dedupe_")
 
 
@@ -68,7 +73,7 @@ def cmd_auth(args):
     if args.provider == "google-drive":
         client = GoogleDriveProvider(
             credentials_file=args.credentials,
-            token_file="token_drive.json",
+            token_file=str(GOOGLE_DRIVE_TOKEN),
         )
         if client.authenticate():
             print("Google Drive: autenticación exitosa.")
@@ -79,7 +84,7 @@ def cmd_auth(args):
     elif args.provider == "onedrive":
         client = OneDriveProvider(
             config_file=args.onedrive_config,
-            token_cache="token_onedrive.json",
+            token_cache=str(ONEDRIVE_TOKEN),
         )
         if client.authenticate():
             print("OneDrive: autenticación exitosa.")
@@ -101,7 +106,7 @@ def cmd_auth(args):
     elif args.provider == "google-photos":
         client = GooglePhotosProvider(
             credentials_file=args.credentials,
-            token_file="token_photos.json",
+            token_file=str(GOOGLE_PHOTOS_TOKEN),
             mode=args.photos_mode,
         )
         if client.authenticate():
@@ -148,7 +153,7 @@ def cmd_scan(args):
     if "google-drive" in args.sources:
         gd = GoogleDriveProvider(
             credentials_file=args.credentials,
-            token_file="token_drive.json",
+            token_file=str(GOOGLE_DRIVE_TOKEN),
         )
         providers.append(("google_drive", gd, args.drive_root))
         provider_names.append("Google Drive")
@@ -157,7 +162,7 @@ def cmd_scan(args):
     if "onedrive" in args.sources:
         od = OneDriveProvider(
             config_file=args.onedrive_config,
-            token_cache="token_onedrive.json",
+            token_cache=str(ONEDRIVE_TOKEN),
         )
         providers.append(("onedrive", od, args.onedrive_root))
         provider_names.append("OneDrive")
@@ -172,7 +177,7 @@ def cmd_scan(args):
     if "google-photos" in args.sources:
         gp = GooglePhotosProvider(
             credentials_file=args.credentials,
-            token_file="token_photos.json",
+            token_file=str(GOOGLE_PHOTOS_TOKEN),
             mode=args.photos_mode,
         )
         providers.append(("google_photos", gp, None))
@@ -337,6 +342,11 @@ def cmd_scan(args):
         return
 
     base_path = args.report
+    
+    # Crear directorio de reportes si no existe
+    from pathlib import Path
+    Path(base_path).parent.mkdir(parents=True, exist_ok=True)
+    
     reports.to_json(all_groups, f"{base_path}.json")
     reports.to_csv(all_groups, f"{base_path}.csv")
     reports.to_html(all_groups, f"{base_path}.html")
@@ -409,9 +419,9 @@ Ejemplos:
     auth_parser = subparsers.add_parser("auth", help="Autentica con un provider")
     auth_parser.add_argument("provider", choices=["google-drive", "onedrive", "whatsapp", "google-photos", "google-photos-folder", "google-takeout"],
                               help="Provider a autenticar")
-    auth_parser.add_argument("--credentials", default="credentials.json",
+    auth_parser.add_argument("--credentials", default=str(GOOGLE_DRIVE_CREDENTIALS),
                               help="Ruta a credentials.json de Google (OAuth)")
-    auth_parser.add_argument("--onedrive-config", default="onedrive_config.json",
+    auth_parser.add_argument("--onedrive-config", default=str(ONEDRIVE_CONFIG),
                               help="Ruta a onedrive_config.json con client_id")
     auth_parser.add_argument("--whatsapp-folder", default=None,
                               help="Ruta de la carpeta de WhatsApp (para verificar)")
@@ -441,14 +451,14 @@ Ejemplos:
                               help="ID de carpeta raíz en Google Drive (opcional)")
     scan_parser.add_argument("--onedrive-root", default=None,
                               help="ID de carpeta raíz en OneDrive (opcional)")
-    scan_parser.add_argument("--credentials", default="credentials.json",
+    scan_parser.add_argument("--credentials", default=str(GOOGLE_DRIVE_CREDENTIALS),
                               help="Ruta a credentials.json de Google (OAuth)")
-    scan_parser.add_argument("--onedrive-config", default="onedrive_config.json",
+    scan_parser.add_argument("--onedrive-config", default=str(ONEDRIVE_CONFIG),
                               help="Ruta a onedrive_config.json con client_id")
     scan_parser.add_argument("--hash-mode", choices=["metadata", "full"], default="full",
                               help="metadata: solo hashes de la API (rápido). full: descargar y calcular MD5+SHA-256 (preciso). Default: full")
-    scan_parser.add_argument("--image-threshold", type=int, default=DEFAULT_IMAGE_THRESHOLD,
-                              help=f"Distancia Hamming máxima para imágenes similares (default: {DEFAULT_IMAGE_THRESHOLD})")
+    scan_parser.add_argument("--image-threshold", type=float, default=DEFAULT_IMAGE_THRESHOLD,
+                              help=f"Porcentaje mínimo de similitud para imágenes similares (default: {DEFAULT_IMAGE_THRESHOLD})")
     scan_parser.add_argument("--video-threshold", type=float, default=DEFAULT_VIDEO_THRESHOLD,
                               help=f"Ratio mínimo de similitud para videos (default: {DEFAULT_VIDEO_THRESHOLD})")
     scan_parser.add_argument("--video-frames", type=int, default=VIDEO_NUM_FRAMES,
@@ -457,8 +467,8 @@ Ejemplos:
                               help="Saltar detección de casi-duplicados (solo exactos)")
     scan_parser.add_argument("--cache-db", default=None,
                               help="Ruta de la base de datos de caché (default: media_cache.db)")
-    scan_parser.add_argument("--report", default="reporte_duplicados",
-                              help="Nombre base del reporte (sin extensión)")
+    scan_parser.add_argument("--report", default=str(REPORTE_JSON).replace(".json", ""),
+                              help="Nombre base del reporte (default: reports/latest/duplicados)")
 
     args = parser.parse_args()
 

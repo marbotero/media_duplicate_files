@@ -17,12 +17,13 @@ from typing import Optional
 from providers.base import (
     StorageProvider, MediaItem, IMAGE_MIMES, VIDEO_MIMES,
 )
+from config.paths import GOOGLE_DRIVE_CREDENTIALS, GOOGLE_DRIVE_TOKEN
 
 logger = logging.getLogger("media_dedupe")
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
-TOKEN_FILE = "token_drive.json"
-CREDENTIALS_FILE = "credentials.json"
+TOKEN_FILE = str(GOOGLE_DRIVE_TOKEN)
+CREDENTIALS_FILE = str(GOOGLE_DRIVE_CREDENTIALS)
 
 FILE_FIELDS = (
     "nextPageToken,files("

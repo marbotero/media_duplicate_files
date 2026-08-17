@@ -32,6 +32,7 @@ from typing import Optional
 from providers.base import (
     StorageProvider, MediaItem, IMAGE_MIMES, VIDEO_MIMES,
 )
+from config.paths import GOOGLE_DRIVE_CREDENTIALS, GOOGLE_PHOTOS_TOKEN
 
 logger = logging.getLogger("media_dedupe")
 
@@ -39,8 +40,8 @@ logger = logging.getLogger("media_dedupe")
 SCOPE_APP_CREATED = "https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata"
 SCOPE_PICKER = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly"
 
-TOKEN_FILE = "token_photos.json"
-CREDENTIALS_FILE = "credentials.json"
+TOKEN_FILE = str(GOOGLE_PHOTOS_TOKEN)
+CREDENTIALS_FILE = str(GOOGLE_DRIVE_CREDENTIALS)
 
 PHOTOS_API_BASE = "https://photoslibrary.googleapis.com/v1"
 PICKER_API_BASE = "https://photospicker.googleapis.com/v1"

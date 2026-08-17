@@ -99,7 +99,7 @@ class MediaDedupeGUI:
         self.var_photos_mode = tk.StringVar(value="app-created")
         self.var_hash_mode = tk.StringVar(value="full")
         self.var_skip_similar = tk.BooleanVar(value=False)
-        self.var_image_threshold = tk.StringVar(value="5")
+        self.var_image_threshold = tk.StringVar(value="95")
         self.var_video_threshold = tk.StringVar(value="0.85")
         self.var_report_name = tk.StringVar(value="reporte_duplicados")
 
@@ -269,9 +269,9 @@ class MediaDedupeGUI:
 
         row = tk.Frame(opts_frame, bg=BG_COLOR)
         row.pack(fill="x", pady=4)
-        tk.Label(row, text="Umbral imagenes (Hamming):", bg=BG_COLOR, fg=MUTED,
+        tk.Label(row, text="Umbral imagenes (%):", bg=BG_COLOR, fg=MUTED,
                  font=("Segoe UI", 9)).pack(side="left", padx=(0, 4))
-        tk.Spinbox(row, from_=0, to=20, textvariable=self.var_image_threshold,
+        tk.Spinbox(row, from_=0, to=100, textvariable=self.var_image_threshold,
                    width=5, font=("Segoe UI", 9)).pack(side="left")
         tk.Label(row, text="   Umbral videos (ratio):", bg=BG_COLOR, fg=MUTED,
                  font=("Segoe UI", 9)).pack(side="left", padx=(20, 4))
