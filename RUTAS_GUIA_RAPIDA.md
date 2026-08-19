@@ -1,27 +1,5 @@
 # 🎯 GUÍA RÁPIDA: Rutas Centralizadas Integradas
 
-## ✅ Lo que cambió
-
-```text
-ANTES (hardcodeado):                DESPUÉS (centralizado):
-──────────────────────────────────  ──────────────────────────────────
-
-providers/google_drive.py:          providers/google_drive.py:
-TOKEN_FILE = "token_drive.json" →   from config.paths import GOOGLE_DRIVE_TOKEN
-                                    TOKEN_FILE = str(GOOGLE_DRIVE_TOKEN)
-
-media_dedupe.py:                    media_dedupe.py:
-CACHE_DB = "media_cache.db"     →   from config.paths import MEDIA_CACHE_DB
-                                    CACHE_DB = str(MEDIA_CACHE_DB)
-
-Reportes:                           Reportes:
-./reporte_duplicados.json       →   reports/latest/duplicados.json
-./reporte_duplicados.csv        →   reports/latest/duplicados.csv
-./reporte_duplicados.html       →   reports/latest/duplicados.html
-```
-
----
-
 ## 🚀 Cómo Usar
 
 ### Opción 1: Scan con reportes en carpeta centralizada (Recomendado)
@@ -134,7 +112,7 @@ python media_dedupe.py scan --help
 
 ---
 
-## 📊 Impacto de los Cambios
+## 📊 Impacto
 
 ### Módulos que usan config.paths
 
@@ -204,7 +182,7 @@ cp reports/latest/* reports/archive/2026-08-17/
 
 ## 🎓 Para Aprender Más
 
-- 📖 [INTEGRACION_RUTAS_COMPLETADA.md](INTEGRACION_RUTAS_COMPLETADA.md) - Detalles técnicos
+- 📖 [RUTAS_INTEGRACION.md](RUTAS_INTEGRACION.md) - Detalles técnicos
 - 📖 [config/README.md](config/README.md) - Cómo personalizar
 - 📖 [ESTRUCTURA_PROYECTO.md](ESTRUCTURA_PROYECTO.md) - Visión general
 

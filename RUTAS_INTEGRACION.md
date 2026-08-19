@@ -207,10 +207,10 @@ from dotenv import load_dotenv
 load_dotenv("config/.env")
 ```
 
-### Opción 2: Integrar gui_advanced.py (Opcional)
+### Opción 2: Integrar media_dedupe_gui_advanced.py (Opcional)
 
 ```python
-# En gui_advanced.py, agregar:
+# En media_dedupe_gui_advanced.py, agregar:
 from config.paths import REPORTE_JSON
 
 # En _cargar_reporte_json(), usar REPORTE_JSON como default
@@ -286,7 +286,7 @@ media_duplicate_files/
 
 ## 🔗 Referencias
 
-- [config/README.md](../config/README.md) - Guía detallada
-- [secrets/README.md](../secrets/README.md) - Gestión de credenciales
-- [reports/README.md](../reports/README.md) - Gestión de reportes
-- [ESTRUCTURA_PROYECTO.md](../ESTRUCTURA_PROYECTO.md) - Visión general
+- [config/README.md](/config/README.md) - Guía detallada
+- [secrets/README.md](/secrets/README.md) - Gestión de credenciales
+- [reports/README.md](/reports/README.md) - Gestión de reportes
+- [ESTRUCTURA_PROYECTO.md](ESTRUCTURA_PROYECTO.md) - Visión general

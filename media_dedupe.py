@@ -33,7 +33,7 @@ from typing import List, Optional
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config.paths import (
-    GOOGLE_DRIVE_CREDENTIALS, GOOGLE_DRIVE_TOKEN,
+    GOOGLE_DRIVE_CREDENTIALS, GOOGLE_DRIVE_TOKEN, GOOGLE_PHOTOS_TOKEN, 
     ONEDRIVE_CONFIG, ONEDRIVE_TOKEN,
     MEDIA_CACHE_DB, REPORTE_JSON, REPORTE_HTML, REPORTE_CSV,
 )
