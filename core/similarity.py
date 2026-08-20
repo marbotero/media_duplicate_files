@@ -27,6 +27,47 @@ VIDEO_NUM_FRAMES = 8
 VIDEO_FRAME_THRESHOLD_OFFSET = 3  # Umbral más laxo para frames individuales
 
 
+class _BKTree:
+    """Índice para consultar hashes perceptuales cercanos por distancia Hamming."""
+
+    def __init__(self):
+        self.root = None
+
+    def add(self, hash_value, index):
+        if self.root is None:
+            self.root = (hash_value, [index], {})
+            return
+        node = self.root
+        while True:
+            distance = hash_value - node[0]
+            if distance == 0:
+                node[1].append(index)
+                return
+            child = node[2].get(distance)
+            if child is None:
+                node[2][distance] = (hash_value, [index], {})
+                return
+            node = child
+
+    def query(self, hash_value, max_distance):
+        if self.root is None:
+            return []
+        matches = []
+        pending = [self.root]
+        while pending:
+            node = pending.pop()
+            distance = hash_value - node[0]
+            if distance <= max_distance:
+                matches.extend(node[1])
+            lower = max(1, distance - max_distance)
+            upper = distance + max_distance
+            pending.extend(
+                child for edge, child in node[2].items()
+                if lower <= edge <= upper
+            )
+        return matches
+
+
 def image_similarity_percent(hash_a, hash_b) -> float:
     """Calcula la similitud entre dos hashes pHash como porcentaje de 0 a 100."""
     if hash_a is None or hash_b is None:
@@ -134,16 +175,17 @@ def find_similar_images(
             parent[ra] = rb
 
     best_similarity = defaultdict(lambda: 0.0)
-
-    for i in range(len(hashed)):
-        h1 = imagehash.hex_to_hash(hashed[i].phash)
-        for j in range(i + 1, len(hashed)):
-            h2 = imagehash.hex_to_hash(hashed[j].phash)
-            pct = image_similarity_percent(h1, h2)
+    hash_objects = [imagehash.hex_to_hash(item.phash) for item in hashed]
+    max_distance = int((100 - threshold) * 64 / 100)
+    index = _BKTree()
+    for item_index, hash_object in enumerate(hash_objects):
+        for candidate_index in index.query(hash_object, max_distance):
+            pct = image_similarity_percent(hash_object, hash_objects[candidate_index])
             if pct >= threshold:
-                union(i, j)
-                best_similarity[(i, j)] = pct
-                best_similarity[(j, i)] = pct
+                union(item_index, candidate_index)
+                best_similarity[(item_index, candidate_index)] = pct
+                best_similarity[(candidate_index, item_index)] = pct
+        index.add(hash_object, item_index)
 
     groups = defaultdict(list)
     for i in range(len(hashed)):

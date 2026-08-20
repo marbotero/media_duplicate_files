@@ -8,12 +8,39 @@ import csv
 import html
 import json
 import logging
+import shutil
 import time
+from datetime import datetime
+from pathlib import Path
 from typing import List
 
 from core.similarity import DuplicateGroup
 
 logger = logging.getLogger("media_dedupe")
+
+
+def archive_existing_reports(latest_dir: str | Path, archive_dir: str | Path) -> Path | None:
+    """Mueve los reportes actuales a un archivo fechado antes de sobrescribirlos."""
+    latest_path = Path(latest_dir)
+    files = [path for path in latest_path.iterdir() if path.is_file()] if latest_path.exists() else []
+    if not files:
+        return None
+
+    now = datetime.now()
+    date_dir = Path(archive_dir) / now.strftime("%Y-%m-%d")
+    timestamp = now.strftime("%H-%M-%S")
+    target_dir = date_dir / timestamp
+    suffix = 1
+    while target_dir.exists():
+        target_dir = date_dir / f"{timestamp}-{suffix:02d}"
+        suffix += 1
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    for path in files:
+        shutil.move(str(path), str(target_dir / path.name))
+
+    logger.info("Reportes anteriores archivados en: %s", target_dir)
+    return target_dir
 
 
 def format_size(size: int) -> str:
@@ -26,27 +53,43 @@ def format_size(size: int) -> str:
     return f"{size} B"
 
 
-def to_json(groups: List[DuplicateGroup], output_path: str):
+def to_json(
+    groups: List[DuplicateGroup],
+    output_path: str,
+    scan_status: str = "complete",
+    scan_errors: list[str] | None = None,
+    scanned_items: int = 0,
+):
     """Genera un reporte JSON."""
     data = {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "total_groups": len(groups),
         "total_recoverable_size": sum(g.recoverable_size for g in groups),
         "groups": [g.to_dict() for g in groups],
+        "scan_status": scan_status,
+        "scan_errors": scan_errors or [],
+        "scanned_items": scanned_items,
     }
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     logger.info(f"Reporte JSON: {output_path}")
 
 
-def to_csv(groups: List[DuplicateGroup], output_path: str):
+def to_csv(
+    groups: List[DuplicateGroup],
+    output_path: str,
+    scan_status: str = "complete",
+    scan_errors: list[str] | None = None,
+    scanned_items: int = 0,
+):
     """Genera un reporte CSV."""
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
             "grupo_tipo", "score", "origen", "archivo_nombre", "mime_type",
             "tamaño_bytes", "md5", "sha256", "item_id", "ruta_o_link",
-            "tamaño_recuperable_grupo",
+            "tamaño_recuperable_grupo", "estado_escaneo", "archivos_analizados",
+            "errores_escaneo",
         ])
         for group in groups:
             for item in group.files:
@@ -62,13 +105,48 @@ def to_csv(groups: List[DuplicateGroup], output_path: str):
                     item.item_id,
                     item.path or item.web_url or "",
                     group.recoverable_size,
+                    scan_status,
+                    scanned_items,
+                    " | ".join(scan_errors or []),
                 ])
+        if not groups:
+            writer.writerow([
+                "", "", "", "", "", "", "", "", "", "", "",
+                scan_status, scanned_items, " | ".join(scan_errors or []),
+            ])
     logger.info(f"Reporte CSV: {output_path}")
 
 
-def to_html(groups: List[DuplicateGroup], output_path: str):
+def to_html(
+    groups: List[DuplicateGroup],
+    output_path: str,
+    scan_status: str = "complete",
+    scan_errors: list[str] | None = None,
+    scanned_items: int = 0,
+    provider_stats: dict[str, int] | None = None,
+):
     """Genera un reporte HTML interactivo."""
     total_recoverable = sum(g.recoverable_size for g in groups)
+
+    status_label = "Escaneo completo" if scan_status == "complete" else "Escaneo parcial"
+    status_color = "#1e8e3e" if scan_status == "complete" else "#d93025"
+    error_html = ""
+    if scan_errors:
+        error_html = "<div class='errors'><strong>Incidencias:</strong><ul>" + "".join(
+            f"<li>{html.escape(str(error))}</li>" for error in scan_errors
+        ) + "</ul></div>"
+
+    provider_html = ""
+    if provider_stats:
+        rows = "".join(
+            f"<tr><td>{html.escape(str(provider))}</td><td>{count}</td></tr>"
+            for provider, count in sorted(provider_stats.items())
+        )
+        provider_html = (
+            "<h2>Archivos por proveedor</h2>"
+            "<table><thead><tr><th>Proveedor</th><th>Archivos</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>"
+        )
 
     html_parts = [
         "<!DOCTYPE html>",
@@ -97,12 +175,18 @@ def to_html(groups: List[DuplicateGroup], output_path: str):
         "  .badge.image_similar { background: #fef7e0; color: #f9ab00; }",
         "  .badge.video_similar { background: #e6f4ea; color: #1e8e3e; }",
         "  .source { font-size: 11px; color: #999; }",
+        "  .status { color: #fff; padding: 8px 12px; border-radius: 4px; display: inline-block; font-weight: 600; }",
+        "  .errors { background: #fce8e6; border-left: 4px solid #d93025; padding: 10px 14px; margin-top: 12px; }",
         "</style></head><body>",
         "<h1>Reporte de Duplicados — Multi-origen</h1>",
         "<div class='summary'>",
         f"<p><strong>Fecha:</strong> {time.strftime('%Y-%m-%d %H:%M:%S')}</p>",
         f"<p><strong>Grupos encontrados:</strong> {len(groups)}</p>",
         f"<p><strong>Espacio recuperable estimado:</strong> {format_size(total_recoverable)}</p>",
+        f"<p><strong>Archivos analizados:</strong> {scanned_items}</p>",
+        f"<p><span class='status' style='background:{status_color}'>{html.escape(status_label)}</span></p>",
+        error_html,
+        provider_html,
         "</div>",
     ]
 

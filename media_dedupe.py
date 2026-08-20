@@ -21,21 +21,23 @@ Autor: Generado por Perplexity Computer
 """
 
 import argparse
+import atexit
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import time
 from collections import defaultdict
+from pathlib import Path
 from typing import List, Optional
 
 # Asegurar que el directorio actual está en el path para imports relativos
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config.paths import (
-    GOOGLE_DRIVE_CREDENTIALS, GOOGLE_DRIVE_TOKEN, GOOGLE_PHOTOS_TOKEN, 
-    ONEDRIVE_CONFIG, ONEDRIVE_TOKEN,
-    MEDIA_CACHE_DB, REPORTE_JSON, REPORTE_HTML, REPORTE_CSV,
+    MEDIA_CACHE_DB, REPORTE_JSON, REPORTE_HTML, REPORTE_CSV, REPORTES_ARCHIVE,
+    rutas_perfil_google, rutas_perfil_onedrive,
 )
 from providers.base import MediaItem, IMAGE_MIMES, VIDEO_MIMES
 from providers.google_drive import GoogleDriveProvider
@@ -64,16 +66,19 @@ logger = logging.getLogger("media_dedupe")
 
 CACHE_DB = str(MEDIA_CACHE_DB)
 CACHE_DIR = tempfile.mkdtemp(prefix="media_dedupe_")
+atexit.register(shutil.rmtree, CACHE_DIR, ignore_errors=True)
 
 
 # ─── Comandos ─────────────────────────────────────────────────────────────────
 
 def cmd_auth(args):
     """Autentica con un provider específico."""
+    google_paths = rutas_perfil_google(args.google_profile)
+    onedrive_paths = rutas_perfil_onedrive(args.onedrive_profile)
     if args.provider == "google-drive":
         client = GoogleDriveProvider(
-            credentials_file=args.credentials,
-            token_file=str(GOOGLE_DRIVE_TOKEN),
+            credentials_file=str(google_paths["credentials"]),
+            token_file=str(google_paths["drive_token"]),
         )
         if client.authenticate():
             print("Google Drive: autenticación exitosa.")
@@ -83,8 +88,8 @@ def cmd_auth(args):
 
     elif args.provider == "onedrive":
         client = OneDriveProvider(
-            config_file=args.onedrive_config,
-            token_cache=str(ONEDRIVE_TOKEN),
+            config_file=str(onedrive_paths["config"]),
+            token_cache=str(onedrive_paths["token"]),
         )
         if client.authenticate():
             print("OneDrive: autenticación exitosa.")
@@ -105,8 +110,8 @@ def cmd_auth(args):
 
     elif args.provider == "google-photos":
         client = GooglePhotosProvider(
-            credentials_file=args.credentials,
-            token_file=str(GOOGLE_PHOTOS_TOKEN),
+            credentials_file=str(google_paths["credentials"]),
+            token_file=str(google_paths["photos_token"]),
             mode=args.photos_mode,
         )
         if client.authenticate():
@@ -148,21 +153,27 @@ def cmd_scan(args):
     """Ejecuta el escaneo completo de duplicados en todos los orígenes configurados."""
     providers = []
     provider_names = []
+    google_paths = rutas_perfil_google(args.google_profile)
+    onedrive_paths = rutas_perfil_onedrive(args.onedrive_profile)
 
-    # Configurar Google Drive
+    # Configurar Google Drive. Cada root se procesa como una entrada separada.
     if "google-drive" in args.sources:
         gd = GoogleDriveProvider(
-            credentials_file=args.credentials,
-            token_file=str(GOOGLE_DRIVE_TOKEN),
+            credentials_file=str(google_paths["credentials"]),
+            token_file=str(google_paths["drive_token"]),
         )
-        providers.append(("google_drive", gd, args.drive_root))
-        provider_names.append("Google Drive")
+        drive_roots = args.drive_root or [None]
+        for drive_root in drive_roots:
+            providers.append(("google_drive", gd, drive_root))
+            provider_names.append(
+                f"Google Drive ({drive_root})" if drive_root else "Google Drive"
+            )
 
     # Configurar OneDrive
     if "onedrive" in args.sources:
         od = OneDriveProvider(
-            config_file=args.onedrive_config,
-            token_cache=str(ONEDRIVE_TOKEN),
+            config_file=str(onedrive_paths["config"]),
+            token_cache=str(onedrive_paths["token"]),
         )
         providers.append(("onedrive", od, args.onedrive_root))
         provider_names.append("OneDrive")
@@ -176,8 +187,8 @@ def cmd_scan(args):
     # Configurar Google Photos (API)
     if "google-photos" in args.sources:
         gp = GooglePhotosProvider(
-            credentials_file=args.credentials,
-            token_file=str(GOOGLE_PHOTOS_TOKEN),
+            credentials_file=str(google_paths["credentials"]),
+            token_file=str(google_paths["photos_token"]),
             mode=args.photos_mode,
         )
         providers.append(("google_photos", gp, None))
@@ -224,18 +235,31 @@ def cmd_scan(args):
 
     # Fase 1: Listar archivos de cada provider
     all_items: List[MediaItem] = []
+    scan_errors = []
 
     for source_name, provider, root in providers:
         logger.info(f"── Listando archivos de {source_name} ──")
         try:
             items = provider.iter_media(root=root)
             all_items.extend(items)
+            if source_name in {"google_drive", "onedrive", "google_photos"} \
+                    and not provider.is_authenticated():
+                scan_errors.append(f"{source_name}: autenticación no disponible")
         except Exception as e:
             logger.error(f"Error listando {source_name}: {e}")
+            scan_errors.append(f"{source_name}: {e}")
 
     if not all_items:
         print("\nNo se encontraron archivos multimedia en ningún origen.")
         cache.close()
+        base_path = args.report
+        Path(base_path).parent.mkdir(parents=True, exist_ok=True)
+        if Path(base_path).parent.resolve() == Path(REPORTE_JSON).parent.resolve():
+            reports.archive_existing_reports(Path(REPORTE_JSON).parent, REPORTES_ARCHIVE)
+        status = "partial" if scan_errors else "complete"
+        reports.to_json([], f"{base_path}.json", status, scan_errors, 0)
+        reports.to_csv([], f"{base_path}.csv", status, scan_errors, 0)
+        reports.to_html([], f"{base_path}.html", status, scan_errors, 0, {})
         return
 
     # Resumen
@@ -288,11 +312,13 @@ def cmd_scan(args):
                     # Guardar en caché
                     cache.put(
                         item.source, item.item_id, item.size, item.modified_time,
-                        md5=item.md5, sha256=item.sha256,
+                        md5=item.md5, sha256=item.sha256, phash=item.phash,
+                        video_frame_hashes=item.video_frame_hashes, commit=False,
                     )
 
             if (i + 1) % 50 == 0:
                 logger.info(f"  Hashes calculados: {i+1}/{len(all_items)}")
+        cache.commit()
 
     elif args.hash_mode == "metadata":
         logger.info("Modo metadata: usando hashes disponibles de la API (sin descargar).")
@@ -334,22 +360,45 @@ def cmd_scan(args):
         )
         all_groups.extend(vid_similar)
 
+        # Persistir pHash y hashes de frames para evitar recalcularlos.
+        for item in remaining:
+            if item.phash or item.video_frame_hashes:
+                cache.put(
+                    item.source, item.item_id, item.size, item.modified_time,
+                    md5=item.md5, sha256=item.sha256, phash=item.phash,
+                    video_frame_hashes=item.video_frame_hashes, commit=False,
+                )
+        cache.commit()
+
     cache.close()
 
     # Fase 4: Generar reportes
     if not all_groups:
         print("\nNo se encontraron duplicados ni archivos similares.")
+        base_path = args.report
+        if Path(base_path).parent.resolve() == Path(REPORTE_JSON).parent.resolve():
+            reports.archive_existing_reports(Path(REPORTE_JSON).parent, REPORTES_ARCHIVE)
+        Path(base_path).parent.mkdir(parents=True, exist_ok=True)
+        status = "partial" if scan_errors else "complete"
+        reports.to_json([], f"{base_path}.json", status, scan_errors, len(all_items))
+        reports.to_csv([], f"{base_path}.csv", status, scan_errors, len(all_items))
+        reports.to_html([], f"{base_path}.html", status, scan_errors, len(all_items), dict(by_source))
         return
 
     base_path = args.report
+
+    # Archivar el contenido anterior de latest antes de generar el nuevo.
+    latest_dir = Path(REPORTE_JSON).parent
+    if Path(base_path).parent.resolve() == latest_dir.resolve():
+        reports.archive_existing_reports(latest_dir, REPORTES_ARCHIVE)
     
     # Crear directorio de reportes si no existe
-    from pathlib import Path
     Path(base_path).parent.mkdir(parents=True, exist_ok=True)
     
-    reports.to_json(all_groups, f"{base_path}.json")
-    reports.to_csv(all_groups, f"{base_path}.csv")
-    reports.to_html(all_groups, f"{base_path}.html")
+    status = "partial" if scan_errors else "complete"
+    reports.to_json(all_groups, f"{base_path}.json", status, scan_errors, len(all_items))
+    reports.to_csv(all_groups, f"{base_path}.csv", status, scan_errors, len(all_items))
+    reports.to_html(all_groups, f"{base_path}.html", status, scan_errors, len(all_items), dict(by_source))
 
     # Resumen final
     print(f"\n{'='*60}")
@@ -419,10 +468,6 @@ Ejemplos:
     auth_parser = subparsers.add_parser("auth", help="Autentica con un provider")
     auth_parser.add_argument("provider", choices=["google-drive", "onedrive", "whatsapp", "google-photos", "google-photos-folder", "google-takeout"],
                               help="Provider a autenticar")
-    auth_parser.add_argument("--credentials", default=str(GOOGLE_DRIVE_CREDENTIALS),
-                              help="Ruta a credentials.json de Google (OAuth)")
-    auth_parser.add_argument("--onedrive-config", default=str(ONEDRIVE_CONFIG),
-                              help="Ruta a onedrive_config.json con client_id")
     auth_parser.add_argument("--whatsapp-folder", default=None,
                               help="Ruta de la carpeta de WhatsApp (para verificar)")
     auth_parser.add_argument("--google-photos-folder", default=None,
@@ -431,6 +476,10 @@ Ejemplos:
                               help="Ruta de la carpeta de Google Takeout completa (para verificar)")
     auth_parser.add_argument("--photos-mode", choices=["app-created", "picker"], default="app-created",
                               help="Modo de Google Photos API: 'app-created' (solo medios de la app) o 'picker' (selección manual)")
+    auth_parser.add_argument("--google-profile", default="boteroestradamarcelo",
+                              help="Perfil Google en secrets/accounts/google")
+    auth_parser.add_argument("--onedrive-profile", default="botero_estrada_marcelo",
+                              help="Perfil OneDrive en secrets/accounts/onedrive")
 
     # Subcomando: scan
     scan_parser = subparsers.add_parser("scan", help="Ejecuta el escaneo de duplicados")
@@ -447,14 +496,10 @@ Ejemplos:
                               help="Carpeta local arbitraria a escanear (repetir para múltiples)")
     scan_parser.add_argument("--photos-mode", choices=["app-created", "picker"], default="app-created",
                               help="Modo de Google Photos API: 'app-created' o 'picker'")
-    scan_parser.add_argument("--drive-root", default=None,
-                              help="ID de carpeta raíz en Google Drive (opcional)")
+    scan_parser.add_argument("--drive-root", action="append", default=[],
+                              help="ID de carpeta raíz en Google Drive (repetir para múltiples carpetas)")
     scan_parser.add_argument("--onedrive-root", default=None,
                               help="ID de carpeta raíz en OneDrive (opcional)")
-    scan_parser.add_argument("--credentials", default=str(GOOGLE_DRIVE_CREDENTIALS),
-                              help="Ruta a credentials.json de Google (OAuth)")
-    scan_parser.add_argument("--onedrive-config", default=str(ONEDRIVE_CONFIG),
-                              help="Ruta a onedrive_config.json con client_id")
     scan_parser.add_argument("--hash-mode", choices=["metadata", "full"], default="full",
                               help="metadata: solo hashes de la API (rápido). full: descargar y calcular MD5+SHA-256 (preciso). Default: full")
     scan_parser.add_argument("--image-threshold", type=float, default=DEFAULT_IMAGE_THRESHOLD,
@@ -469,6 +514,10 @@ Ejemplos:
                               help="Ruta de la base de datos de caché (default: media_cache.db)")
     scan_parser.add_argument("--report", default=str(REPORTE_JSON).replace(".json", ""),
                               help="Nombre base del reporte (default: reports/latest/duplicados)")
+    scan_parser.add_argument("--google-profile", default="boteroestradamarcelo",
+                             help="Perfil Google en secrets/accounts/google")
+    scan_parser.add_argument("--onedrive-profile", default="botero_estrada_marcelo",
+                             help="Perfil OneDrive en secrets/accounts/onedrive")
 
     args = parser.parse_args()
 

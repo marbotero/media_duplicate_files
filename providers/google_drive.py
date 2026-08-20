@@ -17,13 +17,14 @@ from typing import Optional
 from providers.base import (
     StorageProvider, MediaItem, IMAGE_MIMES, VIDEO_MIMES,
 )
-from config.paths import GOOGLE_DRIVE_CREDENTIALS, GOOGLE_DRIVE_TOKEN
+from config.paths import rutas_perfil_google
 
 logger = logging.getLogger("media_dedupe")
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
-TOKEN_FILE = str(GOOGLE_DRIVE_TOKEN)
-CREDENTIALS_FILE = str(GOOGLE_DRIVE_CREDENTIALS)
+_DEFAULT_GOOGLE = rutas_perfil_google("boteroestradamarcelo")
+TOKEN_FILE = str(_DEFAULT_GOOGLE["drive_token"])
+CREDENTIALS_FILE = str(_DEFAULT_GOOGLE["credentials"])
 
 FILE_FIELDS = (
     "nextPageToken,files("
@@ -80,6 +81,32 @@ class GoogleDriveProvider(StorageProvider):
 
     def is_authenticated(self) -> bool:
         return self.service is not None
+
+    def list_folders(self) -> list[tuple[str, str]]:
+        """Devuelve las carpetas visibles como pares (nombre, id)."""
+        if not self.is_authenticated() and not self.authenticate():
+            return []
+
+        folders = []
+        page_token = None
+        while True:
+            response = self._api_call(self.service.files().list(
+                q="mimeType='application/vnd.google-apps.folder' and trashed=false",
+                spaces="drive",
+                fields="nextPageToken,files(id,name)",
+                orderBy="name",
+                pageSize=1000,
+                pageToken=page_token,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                corpora="allDrives",
+            ))
+            folders.extend((item.get("name", "Sin nombre"), item["id"])
+                           for item in response.get("files", []) if item.get("id"))
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+        return folders
 
     def _api_call(self, request):
         """Ejecuta una llamada a la API con reintentos."""

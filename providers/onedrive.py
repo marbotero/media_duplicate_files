@@ -16,13 +16,14 @@ from providers.base import (
     StorageProvider, MediaItem, IMAGE_MIMES, VIDEO_MIMES,
     IMAGE_EXTENSIONS, VIDEO_EXTENSIONS,
 )
-from config.paths import ONEDRIVE_CONFIG, ONEDRIVE_TOKEN
+from config.paths import rutas_perfil_onedrive
 
 logger = logging.getLogger("media_dedupe")
 
 # Configuración de la app (el usuario debe registrar una app en Azure)
-CLIENT_ID_FILE = str(ONEDRIVE_CONFIG)  # JSON con client_id y tenant
-TOKEN_CACHE_FILE = str(ONEDRIVE_TOKEN)
+_DEFAULT_ONEDRIVE = rutas_perfil_onedrive("botero_estrada_marcelo")
+CLIENT_ID_FILE = str(_DEFAULT_ONEDRIVE["config"])  # JSON con client_id y tenant
+TOKEN_CACHE_FILE = str(_DEFAULT_ONEDRIVE["token"])
 
 GRAPH_SCOPES = ["Files.Read.All", "User.Read"]
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"

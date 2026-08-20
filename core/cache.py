@@ -70,6 +70,7 @@ class MediaCache:
         sha256: Optional[str] = None,
         phash: Optional[str] = None,
         video_frame_hashes: Optional[list] = None,
+        commit: bool = True,
     ) -> None:
         """Guarda o actualiza un item en la caché."""
         self.conn.execute(
@@ -82,6 +83,11 @@ class MediaCache:
                 json.dumps(video_frame_hashes) if video_frame_hashes else None,
             ),
         )
+        if commit:
+            self.conn.commit()
+
+    def commit(self) -> None:
+        """Confirma una tanda de actualizaciones de cache."""
         self.conn.commit()
 
     def close(self):
