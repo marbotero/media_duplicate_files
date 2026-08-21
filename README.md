@@ -13,25 +13,49 @@ El programa se ejecuta desde la consola y solo lee archivos multimedia para gene
 
 ### Instalar dependencias
 
-Desde la raiz del proyecto:
+Clona el repositorio y entra en la carpeta raíz del proyecto antes de crear el entorno virtual.
 
 ```bash
+cd media_duplicate_files
 python -m venv .venv
 ```
+
+#### Activar la venv
 
 Windows PowerShell:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+```
+
+Windows CMD:
+
+```cmd
+.venv\Scripts\activate.bat
 ```
 
 Linux o macOS:
 
 ```bash
 source .venv/bin/activate
+```
+
+#### Instalar paquetes del proyecto
+
+```bash
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
+
+#### Usarla desde VS Code
+
+Si abres el proyecto en VS Code, selecciona el intérprete del entorno virtual:
+
+1. Presiona `Ctrl+Shift+P`
+2. Elige `Python: Select Interpreter`
+3. Selecciona la opción que apunte a `.venv` dentro de la raíz del proyecto
+
+Esto hace que las terminales, el depurador y el autocompletado usen la misma Python del proyecto.
 
 Instala las herramientas externas con tu gestor habitual:
 
