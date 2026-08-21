@@ -1,0 +1,15 @@
+.vscode/
+.idea/
+*\__pycache__
+venv_dev
+.pytest_cache/
+
+secrets/*
+!secrets/README.md
+!secrets/.gitignore
+
+reports/*
+!reports/README.md
+!reports/.gitignore
+
+!.gitignore
