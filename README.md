@@ -117,7 +117,7 @@ Google Photos limita la API para aplicaciones nuevas. `app-created` solo muestra
 }
 ```
 
-5. Autentica:
+1. Autentica:
 
 ```bash
 python media_dedupe.py auth onedrive
@@ -262,6 +262,7 @@ reports/archive/YYYY-MM-DD/HH-MM-SS/
 ```
 
 Si dos ejecuciones coinciden en el mismo segundo, se añade un sufijo incremental para no sobrescribir archivos.
+
 - `secrets/accounts/`: perfiles de credenciales y tokens locales.
 
 Para guardar un reporte en otra ubicacion, indica el nombre base sin extension. El archivado automático de `latest` se aplica cuando el destino es `reports/latest`:
