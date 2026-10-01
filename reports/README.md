@@ -115,8 +115,8 @@ cp reports/archive/2026-08-17/scan_google-drive_2026-08-17_10-30.json reports/la
 ### 3️⃣ Visualizar en GUI
 
 ```bash
-python media_dedupe_gui_advance.py
-# Botón "Abrir Reporte" → reports/latest/duplicados.json
+python media_dedupe_web.py
+# Abre el navegador y carga automáticamente reports/latest/duplicados.json
 ```
 
 ### 4️⃣ Eliminar Duplicados
@@ -215,4 +215,4 @@ ls reports/archive/2026-08-17/ | grep -o "scan_[^_]*" | sort | uniq -c
 
 - [README.md](../README.md) - Documentación principal
 - [media_dedupe.py](../media_dedupe.py) - Script de generación
-- [media_dedupe_gui_advance.py](../media_dedupe_gui_advance.py) - Visualizador GUI
+- [media_dedupe_web.py](../media_dedupe_web.py) - Visualizador GUI web local

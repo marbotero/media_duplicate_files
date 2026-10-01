@@ -279,6 +279,11 @@ def cmd_scan(args):
     print(f"  Tamaño total: {reports.format_size(total_size)}")
     print()
 
+    # Tamaños en el momento del listado. Google Photos reporta size=0 al listar y
+    # lo actualiza al descargar; guardar el tamaño original da una clave de caché
+    # estable en todas las fases (hashing y persistencia de pHash).
+    key_sizes = {(it.source, it.item_id): it.size for it in all_items}
+
     # Crear mapa de providers con aliases para despacho correcto
     provider_map = {}
     for name, provider, _ in providers:
@@ -291,8 +296,12 @@ def cmd_scan(args):
     if args.hash_mode == "full":
         logger.info("── Calculando hashes (MD5 + SHA-256) ──")
         for i, item in enumerate(all_items):
+            # Fijar el tamaño de la clave de caché ANTES de descargar. Google Photos
+            # reporta size=0 al listar y el valor real recién tras descargar; usar el
+            # mismo key_size en get y put evita fallar siempre la caché (re-descarga).
+            key_size = key_sizes.get((item.source, item.item_id), item.size)
             # Comprobar caché primero
-            cached = cache.get(item.source, item.item_id, item.size, item.modified_time)
+            cached = cache.get(item.source, item.item_id, key_size, item.modified_time)
             if cached:
                 if cached.get("md5"):
                     item.md5 = cached["md5"]
@@ -309,9 +318,9 @@ def cmd_scan(args):
                 provider = provider_map.get(item.source)
                 if provider:
                     ensure_hashes(item, provider, CACHE_DIR)
-                    # Guardar en caché
+                    # Guardar en caché con el mismo key_size usado en el get.
                     cache.put(
-                        item.source, item.item_id, item.size, item.modified_time,
+                        item.source, item.item_id, key_size, item.modified_time,
                         md5=item.md5, sha256=item.sha256, phash=item.phash,
                         video_frame_hashes=item.video_frame_hashes, commit=False,
                     )
@@ -364,7 +373,9 @@ def cmd_scan(args):
         for item in remaining:
             if item.phash or item.video_frame_hashes:
                 cache.put(
-                    item.source, item.item_id, item.size, item.modified_time,
+                    item.source, item.item_id,
+                    key_sizes.get((item.source, item.item_id), item.size),
+                    item.modified_time,
                     md5=item.md5, sha256=item.sha256, phash=item.phash,
                     video_frame_hashes=item.video_frame_hashes, commit=False,
                 )

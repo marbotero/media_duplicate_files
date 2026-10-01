@@ -131,6 +131,7 @@ class GooglePhotosProvider(StorageProvider):
                     time.sleep(wait)
                 else:
                     raise
+        raise RuntimeError(f"Google Photos: rate limit persistente tras {MAX_RETRIES} intentos: {url}")
 
     def _api_post(self, url: str, json_body: dict) -> dict:
         """Ejecuta un POST a la API con reintentos."""
@@ -151,6 +152,7 @@ class GooglePhotosProvider(StorageProvider):
                     time.sleep(wait)
                 else:
                     raise
+        raise RuntimeError(f"Google Photos: rate limit persistente tras {MAX_RETRIES} intentos: {url}")
 
     def _parse_media_item(self, raw: dict) -> Optional[MediaItem]:
         """Convierte un media item de la API en un MediaItem."""

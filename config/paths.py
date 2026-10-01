@@ -69,7 +69,7 @@ TESTS_DIR = CODIGO_DIR / "tests"
 
 # Archivos principales
 MEDIA_DEDUPE_PY = CODIGO_DIR / "media_dedupe.py"
-GUI_ADVANCE = CODIGO_DIR / "media_dedupe_gui_advance.py"
+GUI_WEB = CODIGO_DIR / "media_dedupe_web.py"
 
 # 📄 DOCUMENTACIÓN
 README = CODIGO_DIR / "README.md"

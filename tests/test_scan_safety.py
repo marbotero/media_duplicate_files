@@ -2,7 +2,8 @@ import json
 
 from core.reports import to_csv, to_html, to_json
 from core.cache import MediaCache
-from media_dedupe_gui_advance import GestorCuarentena, PanelResultados
+from core.quarantine import GestorCuarentena
+from webgui import file_key
 
 
 def test_empty_report_records_scan_status(tmp_path):
@@ -17,11 +18,12 @@ def test_empty_report_records_scan_status(tmp_path):
     assert data["scanned_items"] == 12
 
 
-def test_gui_file_key_is_independent_of_visual_order():
+def test_file_key_is_stable_and_distinct():
     first = {"source": "local_folder", "item_id": "a.jpg", "path": "C:/a.jpg"}
     second = {"source": "local_folder", "item_id": "b.jpg", "path": "C:/b.jpg"}
 
-    assert PanelResultados._clave_archivo(first) != PanelResultados._clave_archivo(second)
+    assert file_key(first) == file_key(dict(first))   # estable
+    assert file_key(first) != file_key(second)          # distintos archivos
 
 
 def test_quarantine_moves_and_restores_file(tmp_path):
@@ -29,8 +31,7 @@ def test_quarantine_moves_and_restores_file(tmp_path):
     original.parent.mkdir()
     original.write_bytes(b"media-data")
 
-    quarantine = GestorCuarentena()
-    quarantine.raiz = tmp_path / "quarantine"
+    quarantine = GestorCuarentena(tmp_path / "quarantine")
     moved, errors, session = quarantine.mover([{"path": str(original)}])
 
     assert moved == 1
@@ -70,8 +71,7 @@ def test_quarantine_supports_selective_restore_and_delete(tmp_path):
     first.write_bytes(b"first")
     second.write_bytes(b"second")
 
-    quarantine = GestorCuarentena()
-    quarantine.raiz = tmp_path / "quarantine"
+    quarantine = GestorCuarentena(tmp_path / "quarantine")
     moved, errors, session = quarantine.mover([
         {"path": str(first)}, {"path": str(second)},
     ])

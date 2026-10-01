@@ -277,42 +277,37 @@ La cache evita recalcular hashes cuando el origen, identificador, tamano y fecha
 python media_dedupe.py scan --local-folder "C:\\Fotos" --cache-db "C:\\Temp\\media_cache.db"
 ```
 
-## GUI avanzada
+## GUI web local
 
-La interfaz disponible es `media_dedupe_gui_advance.py`. Abre un reporte JSON, muestra grupos, miniaturas y metadatos, permite filtrar por similitud y eliminar archivos locales seleccionados.
+La interfaz es una aplicación web local que se abre en el navegador (`media_dedupe_web.py`). Arranca un servidor Flask en `127.0.0.1`, abre la vista de revisión automáticamente y no expone nada fuera de tu equipo.
 
 ```bash
-python media_dedupe_gui_advance.py
+python media_dedupe_web.py            # abre el navegador en http://127.0.0.1:5000
+python media_dedupe_web.py --port 8080 --no-browser
 ```
 
-La pestaña **Operacion** permite:
+La vista **Resultados**:
 
-- Autenticar Google Drive, OneDrive y Google Photos.
-- Seleccionar varias carpetas locales mediante el explorador.
-- Cargar y seleccionar varias carpetas de Google Drive despues de autenticarlas.
-- Configurar modo de hash, umbrales, solo duplicados exactos y nombre base del reporte.
-- Mostrar el estado de configuración de Google Drive, Google Photos y OneDrive.
-- Ejecutar el CLI con las rutas centralizadas y ver su salida en tiempo real.
-- Mostrar la fase y el progreso aproximado del proceso.
-- Cancelar el proceso activo desde la ventana sin cerrar la GUI.
-- Cargar automaticamente el JSON generado en la pestaña **Resultados**.
+- **Barra lateral desplazable** con todos los grupos y filtros por umbral de similitud, proveedor y tipo (`exact` / `image_similar` / `video_similar`).
+- **Comparación lado a lado**: al seleccionar un grupo se muestran todas las fotos con **miniaturas** grandes (incluye HEIC si `pillow-heif` está instalado), metadatos y resaltado del archivo de mayor resolución ("Mejor"). Un clic amplía la imagen.
+- Selección de archivos locales y botón **Enviar a cuarentena**: se mueven a `reports/quarantine/<sesion>/` con un manifiesto SHA-256; la restauración verifica el hash antes de devolver el archivo.
+- Los elementos de Google Drive, OneDrive y Google Photos no tienen ruta local movible; se muestran con un enlace para abrirlos en la nube.
 
-La pestaña **Resultados** mantiene la revision por grupos, el filtro de similitud y las acciones sobre archivos locales. Los archivos seleccionados se mueven a `reports/quarantine/<sesion>/` con un manifiesto SHA-256. Desde **Gestionar cuarentena** puedes listar sesiones, restaurar archivos individuales o múltiples, y eliminar definitivamente una sesión.
+La vista **Operación**:
 
-En Resultados puedes filtrar por umbral de similitud, proveedor y tipo de grupo. La cabecera permite abrir directamente los últimos reportes JSON, CSV y HTML.
-
-Al cancelar un escaneo en Windows, la GUI termina el árbol completo del proceso, incluidos `ffmpeg` y `ffprobe`, y el CLI limpia sus temporales al salir. El escaneo cancelado no se presenta como un resultado completo.
+- Lanzar un escaneo (carpetas locales, modo de hash, umbral, solo exactos, nombre de reporte) con el **log en vivo** del CLI y botón **Cancelar** (en Windows termina el árbol completo, incluidos `ffmpeg`/`ffprobe`).
+- Autenticar Google Drive, OneDrive y Google Photos delegando en el CLI.
+- Al terminar un escaneo, la vista Resultados se recarga automáticamente.
 
 Flujo recomendado:
 
-1. Ejecuta un escaneo desde la consola.
-2. Abre la GUI avanzada.
-3. Carga `reports/latest/duplicados.json`.
-4. Revisa cada grupo y ajusta el filtro.
-5. Selecciona manualmente los archivos que quieras retirar.
-6. Confirma la accion.
+1. Ejecuta un escaneo (desde la consola o la vista Operación).
+2. Abre la GUI web: `python media_dedupe_web.py`.
+3. Revisa cada grupo en la comparación lado a lado y ajusta los filtros.
+4. Marca los archivos locales que quieras retirar.
+5. Envíalos a cuarentena (reversible).
 
-La GUI solo puede actuar sobre rutas locales existentes. Los elementos de Google Drive, OneDrive y Google Photos no tienen una ruta local movible. La GUI no elimina directamente: mueve los archivos locales a cuarentena para permitir undo/restauración.
+La GUI solo actúa sobre rutas locales existentes y nunca borra directamente: mueve los archivos locales a cuarentena para permitir deshacer/restaurar.
 
 ## Seguridad y limitaciones
 
@@ -328,9 +323,10 @@ La GUI solo puede actuar sobre rutas locales existentes. Los elementos de Google
 ```text
 media_duplicate_files/
 |-- media_dedupe.py                 # CLI principal
-|-- media_dedupe_gui_advance.py     # GUI para revisar reportes
+|-- media_dedupe_web.py             # Lanzador de la GUI web local
+|-- webgui/                         # Backend Flask + frontend (plantillas y estáticos)
 |-- config/paths.py                 # Rutas centralizadas
-|-- core/                           # Hashes, metadatos, similitud y reportes
+|-- core/                           # Hashes, metadatos, similitud, reportes, cuarentena, miniaturas
 |-- providers/                      # Google, Microsoft y carpetas locales
 |-- reports/                        # Cache, ultimos reportes e historico archivado
 |-- secrets/                        # Credenciales locales, no publicar

@@ -40,6 +40,15 @@ def compute_hashes_from_file(path: str) -> tuple[Optional[str], Optional[str]]:
         return None, None
 
 
+def sha256_file(path: str) -> str:
+    """Calcula el SHA-256 hex de un archivo leyendo por bloques de 1 MB."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for bloque in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(bloque)
+    return digest.hexdigest()
+
+
 def compute_hashes_from_provider(
     item: MediaItem,
     provider,
