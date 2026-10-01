@@ -139,6 +139,9 @@ class OneDriveProvider(StorageProvider):
                     time.sleep(wait)
                 else:
                     raise
+        # Todos los intentos fueron rate-limited (429): fallar explícitamente en
+        # vez de devolver None y provocar un AttributeError en el llamador.
+        raise RuntimeError(f"OneDrive: rate limit persistente tras {MAX_RETRIES} intentos: {url}")
 
     def _download_file(self, download_url: str, path: str) -> None:
         """Descarga un archivo desde la URL de descarga de Graph."""

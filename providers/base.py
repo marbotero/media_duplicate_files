@@ -58,6 +58,15 @@ class MediaItem:
     # Metadatos adicionales (EXIF, ffprobe, etc.)
     extra: dict = field(default_factory=dict)
 
+    def __post_init__(self):
+        # Normalizar hashes a minúsculas para que coincidan entre proveedores.
+        # Microsoft Graph (OneDrive) los entrega en mayúsculas; hashlib local en
+        # minúsculas. Sin esto, el mismo archivo nunca casaría entre orígenes.
+        for attr in ("md5", "sha256", "sha1", "quickxor"):
+            valor = getattr(self, attr)
+            if isinstance(valor, str) and valor:
+                setattr(self, attr, valor.strip().lower())
+
     @property
     def is_image(self) -> bool:
         return self.mime_type in IMAGE_MIMES

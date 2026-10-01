@@ -225,17 +225,21 @@ python media_dedupe.py auth onedrive
 
 Si el client secret de Google se expone, revoca o elimina esa credencial desde Google Cloud Console y descarga un nuevo `google-drive.json`. Si se expone un secreto de OneDrive, elimina la aplicación registrada y crea otra.
 
-## Usar varias cuentas desde la GUI
+## Usar varias cuentas
 
-La pestaña **Autenticación** de `media_dedupe_gui_advance.py` permite mantener perfiles separados:
+Cada cuenta es un perfil independiente. El nombre de perfil recomendado es la parte anterior a `@` del correo (`botero@example.com` → `botero`).
 
-1. Selecciona `google` o `onedrive`.
-2. Pulsa **Nueva cuenta** y escribe el correo de la cuenta. El perfil se crea automáticamente con la parte anterior a `@`: `botero@example.com` crea `botero`.
-3. Usa los botones **Adjuntar** para seleccionar los JSON descargados o generados.
-4. Para OneDrive también puedes escribir el `client_id`, el `tenant` y pulsar **Guardar config**.
-5. Pulsa **Activar cuenta** antes de escanear.
-6. Pulsa **Autenticar** para abrir el navegador y completar OAuth.
-7. El token nuevo se copia automáticamente al perfil elegido.
+1. Coloca el JSON de credenciales en la carpeta del perfil (ver rutas más abajo).
+2. Autentica con el CLI indicando el perfil; el token se guarda en esa misma carpeta:
+
+   ```bash
+   python media_dedupe.py auth google-drive --google-profile botero
+   python media_dedupe.py auth onedrive --onedrive-profile botero
+   ```
+
+3. Escanea usando el mismo perfil (`--google-profile` / `--onedrive-profile`).
+
+Desde la GUI web (`media_dedupe_web.py`, vista **Operación**) puedes disparar la autenticación de cada proveedor, que delega en estos mismos comandos del CLI.
 
 Los perfiles se almacenan directamente en:
 

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "media-dedupe-web",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["media_dedupe_web.py", "--port", "5000", "--no-browser"],
+      "port": 5000
+    }
+  ]
+}

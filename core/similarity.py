@@ -348,10 +348,16 @@ def find_similar_videos(
                     if ratio < 0.95:
                         continue
 
+            # image_threshold llega como porcentaje (p. ej. 95.0); convertirlo a
+            # distancia Hamming (0-64) antes de comparar con la distancia de frames.
+            # Sin esta conversión la condición era siempre verdadera y agrupaba
+            # cualquier par de videos con duración parecida.
+            max_frame_distance = int((100 - image_threshold) * 64 / 100) + VIDEO_FRAME_THRESHOLD_OFFSET
+
             matches = 0
             for hi in hash_objs_i:
                 min_dist = min(hi - hj for hj in hash_objs_j)
-                if min_dist <= image_threshold + VIDEO_FRAME_THRESHOLD_OFFSET:
+                if min_dist <= max_frame_distance:
                     matches += 1
 
             similarity = matches / max(len(hash_objs_i), len(hash_objs_j))
@@ -392,17 +398,49 @@ def find_similar_videos(
 # ─── Duplicados exactos ───────────────────────────────────────────────────────
 
 def find_exact_duplicates(items: list[MediaItem]) -> list[DuplicateGroup]:
-    """Encuentra duplicados exactos usando SHA-256/MD5 + tamaño."""
-    logger.info("Buscando duplicados exactos (SHA-256/MD5 + tamaño)...")
-    groups = defaultdict(list)
+    """Encuentra duplicados exactos por cualquier hash compartido + tamaño.
 
-    for item in items:
-        key = item.hash_key
-        if key[0] != "none":
-            groups[key].append(item)
+    Cada proveedor aporta distintos algoritmos (Drive solo MD5, OneDrive solo
+    SHA-256, local ambos). Se unen (union-find) los ítems que compartan al menos
+    una clave ``(algoritmo, valor, size)``, de modo que un archivo idéntico
+    presente en varios orígenes se agrupe aunque no todos expongan el mismo hash.
+    """
+    logger.info("Buscando duplicados exactos (cualquier hash coincidente + tamaño)...")
+
+    parent = list(range(len(items)))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    # Mapear cada clave de hash a los índices de ítems que la exponen y unirlos.
+    key_to_indices: dict[tuple, int] = {}
+    for idx, item in enumerate(items):
+        for algo in ("sha256", "md5", "sha1", "quickxor"):
+            value = getattr(item, algo, None)
+            if value:
+                key = (algo, value, item.size)
+                previo = key_to_indices.get(key)
+                if previo is None:
+                    key_to_indices[key] = idx
+                else:
+                    union(previo, idx)
+
+    grupos = defaultdict(list)
+    for idx in range(len(items)):
+        # Solo ítems con al menos un hash pueden formar grupos exactos.
+        if items[idx].md5 or items[idx].sha256 or items[idx].sha1 or items[idx].quickxor:
+            grupos[find(idx)].append(items[idx])
 
     duplicates = []
-    for key, group_items in groups.items():
+    for group_items in grupos.values():
         if len(group_items) > 1:
             total_size = sum(f.size for f in group_items)
             max_size = max(f.size for f in group_items)
